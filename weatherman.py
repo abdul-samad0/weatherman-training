@@ -240,13 +240,12 @@ def main():
         yearly_reports = file_parser.parse_files(directory, args.year)
 
         if len(yearly_reports) == 0:
-            print("No data found.")
-            return
+            print("No data found for yearly report.")
+        else:
+            stats = calculator.calculate_yearly(yearly_reports)
+            reporter.print_yearly_report(stats)
 
-        stats = calculator.calculate_yearly(yearly_reports)
-        reporter.print_yearly_report(stats)
-
-    elif args.average:
+    if args.average:
         year_month = args.average.split("/")
         year = int(year_month[0])
         month = int(year_month[1])
@@ -254,30 +253,27 @@ def main():
         monthly_reports = file_parser.parse_files(directory, year)
 
         if len(monthly_reports) == 0:
-            print("No data found.")
-            return
+            print("No data found for monthly averages.")
+        else:
+            avg_max, avg_min, avg_humidity = calculator.calculate_monthly_averages(
+                monthly_reports, year, month
+            )
+            reporter.print_monthly_report(avg_max, avg_min, avg_humidity)
 
-        avg_max, avg_min, avg_humidity = calculator.calculate_monthly_averages(
-            monthly_reports, year, month
-        )
-
-        reporter.print_monthly_report(avg_max, avg_min, avg_humidity)
-
-    elif args.monthly_report:
-        monthly_report_each_day = args.monthly_report.split("/")
-        year = int(monthly_report_each_day[0])
-        month = int(monthly_report_each_day[1])
+    if args.monthly_report:
+        year_month = args.monthly_report.split("/")
+        year = int(year_month[0])
+        month = int(year_month[1])
 
         monthly_each_day_reports = file_parser.parse_files(directory, year)
 
         if len(monthly_each_day_reports) == 0:
-            print("No data found")
-            return
-
-        daily_reports = calculator.calculate_daily_reports(
-            monthly_each_day_reports, year, month
-        )
-        reporter.print_daily_report(daily_reports, year, month)
+            print("No data found for daily report.")
+        else:
+            daily_reports = calculator.calculate_daily_reports(
+                monthly_each_day_reports, year, month
+            )
+            reporter.print_daily_report(daily_reports, year, month)
 
 
 if __name__ == "__main__":
