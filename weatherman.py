@@ -192,6 +192,11 @@ class WeatherReport:
     Prints weather reports.
     """
 
+    def __init__(self):
+        self.RED = "\033[31m"
+        self.BLUE = "\033[34m"
+        self.RESET = "\033[0m"
+
     def print_yearly_report(self, stats):
         high_temp, high_date = stats["highest_temp"]
         low_temp, low_date = stats["lowest_temp"]
@@ -207,18 +212,43 @@ class WeatherReport:
         print("Average Mean Humidity:", str(average_humidity) + "%")
 
     def print_daily_report(self, daily_reports, year, month):
-        RED = "\033[31m"
-        BLUE = "\033[34m"
         month_name = datetime(year, month, 1).strftime("%B")
         print(f"Monthly Report for {month_name} {year}")
         for day, max_temp, min_temp in daily_reports:
             if max_temp is not None:
                 max_bar = "*" * max_temp
-                print(day, RED + max_bar, str(max_temp) + "C")
+                print(day, self.RED + max_bar + self.RESET, str(max_temp) + "C")
 
             if min_temp is not None:
                 min_bar = "*" * min_temp
-                print(day, BLUE + min_bar, str(min_temp) + "C")
+                print(day, self.BLUE + min_bar + self.RESET, str(min_temp) + "C")
+
+    def print_bonus_bar_chart(self, daily_reports, year, month):
+        """
+        Prints a bonus bar chart for a given year and month.
+        """
+
+        month_name = datetime(year, month, 1).strftime("%B")
+        print(month_name, year)
+
+        for day, max_temp, min_temp in daily_reports:
+            day_str = str(day).zfill(2)
+
+            max_bar = ""
+            min_bar = ""
+
+            if max_temp is not None:
+                max_bar = "+" * max_temp
+
+            if min_temp is not None:
+                min_bar = "+" * min_temp
+
+            print(
+                day_str,
+                self.RED + max_bar + self.RESET,
+                self.BLUE + min_bar + self.RESET,
+                str(min_temp) + "C - " + str(max_temp) + "C",
+            )
 
 
 def main():
@@ -227,6 +257,7 @@ def main():
     parser.add_argument("-e", "--year", type=int)
     parser.add_argument("-a", "--average")
     parser.add_argument("-c", "--monthly-report")
+    parser.add_argument("-b", "--bonus")
 
     args = parser.parse_args()
 
@@ -274,6 +305,21 @@ def main():
                 monthly_each_day_reports, year, month
             )
             reporter.print_daily_report(daily_reports, year, month)
+
+    if args.bonus:
+        year_month = args.bonus.split("/")
+        year = int(year_month[0])
+        month = int(year_month[1])
+
+        monthly_reports = file_parser.parse_files(directory, year)
+
+        if len(monthly_reports) == 0:
+            print("No data found for bonus report.")
+        else:
+            daily_reports = calculator.calculate_daily_reports(
+                monthly_reports, year, month
+            )
+            reporter.print_bonus_bar_chart(daily_reports, year, month)
 
 
 if __name__ == "__main__":
