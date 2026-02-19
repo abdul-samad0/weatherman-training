@@ -53,7 +53,7 @@ class WeatherFileParser:
         """
         Find all weather files for a given year in the directory.
         """
-        return list[Path](directory.glob("*" + str(year) + "*.txt"))
+        return list(directory.glob(f"*{year}*.txt"))
 
     def parse_file(self, file_path: Path):
         """
@@ -64,30 +64,68 @@ class WeatherFileParser:
         with open(file_path, "r", encoding="utf-8", errors="ignore", newline="") as file_handle:
             file_reader = csv.reader(file_handle)
 
-            is_header = True
+            header_row = next(file_reader, None)
+            if not header_row:
+                return readings
+
+            def normalize_header(value: str) -> str:
+                return " ".join(value.split()).lower()
+
+            header_to_index = {normalize_header(
+                name): index for index, name in enumerate(header_row)}
+
+            def index_for(*aliases: str) -> Optional[int]:
+                for alias in aliases:
+                    index = header_to_index.get(normalize_header(alias))
+                    if index is not None:
+                        return index
+                return None
+
+            date_index = index_for("PKT", "Date")
+            max_temp_index = index_for(
+                "Max TemperatureC", "Max Temperature", "Max Temp")
+            min_temp_index = index_for(
+                "Min TemperatureC", "Min Temperature", "Min Temp")
+            max_humidity_index = index_for("Max Humidity", "Max Humidity%")
+            mean_humidity_index = index_for("Mean Humidity", "Mean Humidity%")
+
+            missing_columns = []
+            if date_index is None:
+                missing_columns.append("PKT/Date")
+            if max_temp_index is None:
+                missing_columns.append("Max TemperatureC")
+            if min_temp_index is None:
+                missing_columns.append("Min TemperatureC")
+            if max_humidity_index is None:
+                missing_columns.append("Max Humidity")
+            if mean_humidity_index is None:
+                missing_columns.append("Mean Humidity")
+
+            if missing_columns:
+                missing_columns_str = ", ".join(missing_columns)
+                raise ValueError(
+                    f"{file_path}: missing required columns: {missing_columns_str}")
+
+            def cell(row: list[str], index: int) -> Optional[str]:
+                if index < 0 or index >= len(row):
+                    return None
+                return row[index]
 
             for row in file_reader:
-                # skip header
-                if is_header:
-                    is_header = False
-                    continue
-
-                # skip empty or broken rows
-                if len(row) < 9:
-                    continue
-
-                if not row[0]:
+                date_cell = cell(row, date_index)
+                if not date_cell:
                     continue
 
                 try:
-                    reading_date = datetime.strptime(row[0].strip(), "%Y-%m-%d").date()
+                    reading_date = datetime.strptime(
+                        date_cell.strip(), "%Y-%m-%d").date()
                 except ValueError:
                     continue
 
-                max_temp = safe_int(row[1])
-                min_temp = safe_int(row[3])
-                max_humidity = safe_int(row[7])
-                mean_humidity = safe_int(row[8])
+                max_temp = safe_int(cell(row, max_temp_index))
+                min_temp = safe_int(cell(row, min_temp_index))
+                max_humidity = safe_int(cell(row, max_humidity_index))
+                mean_humidity = safe_int(cell(row, mean_humidity_index))
 
                 reading = WeatherReading(
                     reading_date, max_temp, min_temp, max_humidity, mean_humidity
@@ -97,7 +135,7 @@ class WeatherFileParser:
 
         return readings
 
-    def parse_files(self, directory, year):
+    def parse_files(self, directory: Path, year: int) -> list[WeatherReading]:
         """
         Find and parse all weather files for a given year.
         """
@@ -105,8 +143,11 @@ class WeatherFileParser:
         weather_files = self.find_weather_files(directory, year)
 
         for file in weather_files:
-            file_readings = self.parse_file(file)
-            readings.extend(file_readings)
+            try:
+                file_readings = self.parse_file(file)
+                readings.extend(file_readings)
+            except ValueError as exc:
+                print(exc)
 
         return readings
 
@@ -225,17 +266,20 @@ class WeatherReport:
         humidity, humidity_date = stats["highest_humidity"]
 
         if high_temp is not None and high_date is not None:
-            print("Highest:", str(high_temp) + "C on", high_date.strftime("%B %d"))
+            print("Highest:", str(high_temp) +
+                  "C on", high_date.strftime("%B %d"))
         else:
             print("Highest: No data available")
 
         if low_temp is not None and low_date is not None:
-            print("Lowest:", str(low_temp) + "C on", low_date.strftime("%B %d"))
+            print("Lowest:", str(low_temp) + "C on",
+                  low_date.strftime("%B %d"))
         else:
             print("Lowest: No data available")
 
         if humidity is not None and humidity_date is not None:
-            print("Humidity:", str(humidity) + "% on", humidity_date.strftime("%B %d"))
+            print("Humidity:", str(humidity) + "% on",
+                  humidity_date.strftime("%B %d"))
         else:
             print("Humidity: No data available")
 
@@ -250,11 +294,13 @@ class WeatherReport:
         for daily_report in daily_reports:
             if daily_report.max_temp is not None:
                 max_bar = "*" * abs(daily_report.max_temp)
-                print(daily_report.day, self.RED + max_bar + self.RESET, str(daily_report.max_temp) + "C")
+                print(daily_report.day, self.RED + max_bar +
+                      self.RESET, str(daily_report.max_temp) + "C")
 
             if daily_report.min_temp is not None:
                 min_bar = "*" * abs(daily_report.min_temp)
-                print(daily_report.day, self.BLUE + min_bar + self.RESET, str(daily_report.min_temp) + "C")
+                print(daily_report.day, self.BLUE + min_bar +
+                      self.RESET, str(daily_report.min_temp) + "C")
 
     def print_bonus_bar_chart(self, daily_reports, year, month):
         """
@@ -280,7 +326,8 @@ class WeatherReport:
                 day_str,
                 self.RED + max_bar + self.RESET,
                 self.BLUE + min_bar + self.RESET,
-                str(daily_report.min_temp) + "C - " + str(daily_report.max_temp) + "C",
+                str(daily_report.min_temp) + "C - " +
+                str(daily_report.max_temp) + "C",
             )
 
 
@@ -291,7 +338,7 @@ def main():
         "-e", "--year", dest="target_year", type=int, help="Year for yearly report (e.g., 2021)"
     )
     parser.add_argument(
-        "-a", "--average", dest="year_month_for_average", 
+        "-a", "--average", dest="year_month_for_average",
         help="Year/Month for monthly averages (e.g., 2021/3)"
     )
     parser.add_argument(
@@ -312,7 +359,8 @@ def main():
     reporter = WeatherReport()
 
     if args.target_year is not None:
-        yearly_reports: list[WeatherReading] = file_parser.parse_files(directory, args.target_year)
+        yearly_reports: list[WeatherReading] = file_parser.parse_files(
+            directory, args.target_year)
 
         if len(yearly_reports) == 0:
             print("No data found for yearly report.")
@@ -325,7 +373,8 @@ def main():
         year = int(year_month[0])
         month = int(year_month[1])
 
-        monthly_reports: list[WeatherReading] = file_parser.parse_files(directory, year)
+        monthly_reports: list[WeatherReading] = file_parser.parse_files(
+            directory, year)
 
         if len(monthly_reports) == 0:
             print("No data found for monthly averages.")
@@ -340,7 +389,8 @@ def main():
         year = int(year_month[0])
         month = int(year_month[1])
 
-        monthly_each_day_reports: list[WeatherReading] = file_parser.parse_files(directory, year)
+        monthly_each_day_reports: list[WeatherReading] = file_parser.parse_files(
+            directory, year)
 
         if len(monthly_each_day_reports) == 0:
             print("No data found for daily report.")
@@ -355,7 +405,8 @@ def main():
         year = int(year_month[0])
         month = int(year_month[1])
 
-        monthly_reports: list[WeatherReading] = file_parser.parse_files(directory, year)
+        monthly_reports: list[WeatherReading] = file_parser.parse_files(
+            directory, year)
 
         if len(monthly_reports) == 0:
             print("No data found for bonus report.")
